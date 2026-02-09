@@ -5,81 +5,124 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 FILES_DIR = os.path.join(os.path.dirname(__file__), "files")
 
-# ==========================================
-# قائمة الأزرار الرئيسية (العنوان -> اسم الملف)
-# ==========================================
-FILE_BUTTONS = [
-    ("🏫 نبذة عن المدرسة", "school_profile.docx"),
-    ("📍 موقع المدرسة", "school_location.docx"),
-    ("📞 أرقام التواصل", "contact_numbers.docx"),
-    ("🛠️ الدعم الفني", "technical_support.docx"),
-    ("♿ قسم التربية الخاصة", "special_education_department.docx"),
-    ("✍️ التوقيع على ميثاق الشراكة", "partnership_charter_signature.docx"),
-    ("📘 دليل مدرسة مدينة الشامخة", "alshamekha_school_guide.docx"),
-    ("🗓️ التقويم الأكاديمي", "academic_calendar.docx"),
-    ("✅ سياسة التقييم", "assessment_policy.docx"),
-    ("⚖️ سياسة السلوك", "behavior_policy.docx"),
-    ("🛡️ قانون حماية الطفل", "child_protection_policy.docx"),
-    ("🚫 دليل الوالدين للوقاية من المخدرات", "parents_drug_prevention_guide.docx"),
-    ("🔐 سياسة السلامة الرقمية", "digital_safety_policy.docx"),
-    ("🧾 دليل الغش", "academic_dishonesty_guide.docx"),
+# =========================
+# القوائم
+# =========================
+
+MAIN_MENU = [
+    ("🏫 نبذة عن المدرسة", "MENU:about"),
+    ("📍 موقع المدرسة", "MENU:location"),
+    ("📘 الدليل الإرشادي لمدرسة مدينة الشامخة", "MENU:guide"),
+    ("🗓️ التقويم الأكاديمي", "MENU:calendar"),
+    ("📞 تواصل", "MENU:contact"),
+    ("⚖️ سياسات", "MENU:policies"),
 ]
 
-def build_main_menu() -> InlineKeyboardMarkup:
-    # ترتيب الأزرار: زر بكل سطر (أوضح للأهالي)
-    keyboard = [
-        [InlineKeyboardButton(text=title, callback_data=f"FILE:{filename}")]
-        for title, filename in FILE_BUTTONS
-    ]
-    return InlineKeyboardMarkup(keyboard)
+ABOUT_MENU = [
+    ("📄 نبذة عن المدرسة", "FILE:school_profile.docx"),
+]
+
+LOCATION_MENU = [
+    ("📄 موقع المدرسة", "FILE:school_location.docx"),
+]
+
+GUIDE_MENU = [
+    ("📄 الدليل الإرشادي لمدرسة مدينة الشامخة", "FILE:alshamekha_school_guide.docx"),
+]
+
+CALENDAR_MENU = [
+    ("📄 التقويم الأكاديمي", "FILE:academic_calendar.docx"),
+]
+
+CONTACT_MENU = [
+    ("📄 أرقام التواصل", "FILE:contact_numbers.docx"),
+    ("📄 الدعم الفني", "FILE:technical_support.docx"),
+]
+
+POLICIES_MENU = [
+    ("📄 سياسة التقييم", "FILE:assessment_policy.docx"),
+    ("📄 سياسة السلوك", "FILE:behavior_policy.docx"),
+    ("📄 قانون حماية الطفل", "FILE:child_protection_policy.docx"),
+    ("📄 دليل الوالدين للوقاية من المخدرات", "FILE:parents_drug_prevention_guide.docx"),
+    ("📄 سياسة السلامة الرقمية", "FILE:digital_safety_policy.docx"),
+    ("📄 دليل الغش", "FILE:academic_dishonesty_guide.docx"),
+]
+
+MENUS = {
+    "MENU:main": MAIN_MENU,
+    "MENU:about": ABOUT_MENU,
+    "MENU:location": LOCATION_MENU,
+    "MENU:guide": GUIDE_MENU,
+    "MENU:calendar": CALENDAR_MENU,
+    "MENU:contact": CONTACT_MENU,
+    "MENU:policies": POLICIES_MENU,
+}
+
+# =========================
+# أدوات مساعدة
+# =========================
+
+def build_menu(menu_key: str, back: bool = True):
+    buttons = []
+    for title, callback in MENUS.get(menu_key, []):
+        buttons.append([InlineKeyboardButton(text=title, callback_data=callback)])
+
+    if back and menu_key != "MENU:main":
+        buttons.append([InlineKeyboardButton("⬅️ رجوع للقائمة الرئيسية", callback_data="MENU:main")])
+
+    return InlineKeyboardMarkup(buttons)
+
+# =========================
+# أوامر البوت
+# =========================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "مرحباً بكم 🌷\n"
         "هذا هو **سند – المساعد الافتراضي لمدرسة مدينة الشامخة**.\n"
-        "يرجى اختيار الملف المطلوب من القائمة التالية:"
+        "يرجى اختيار القسم المطلوب:"
     )
     await update.message.reply_text(
         text,
-        reply_markup=build_main_menu(),
+        reply_markup=build_menu("MENU:main", back=False),
         parse_mode="Markdown"
     )
 
 async def on_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
     data = query.data
 
-    if not data.startswith("FILE:"):
-        await query.message.reply_text("⚠️ أمر غير معروف. اكتب /start للعودة للقائمة.")
-        return
-
-    filename = data.replace("FILE:", "", 1)
-    file_path = os.path.join(FILES_DIR, filename)
-
-    if not os.path.exists(file_path):
-        await query.message.reply_text(
-            "⚠️ الملف غير متوفر حاليًا.\n"
-            f"اسم الملف المطلوب: {filename}\n"
-            "يرجى التأكد من رفعه داخل مجلد files."
+    # فتح قائمة
+    if data.startswith("MENU:"):
+        await query.message.edit_text(
+            "يرجى اختيار المطلوب:",
+            reply_markup=build_menu(data)
         )
         return
 
-    # إرسال الملف
-    with open(file_path, "rb") as f:
-        await query.message.reply_document(
-            document=f,
-            filename=filename,
-            caption="✅ تفضلوا الملف"
-        )
+    # إرسال ملف
+    if data.startswith("FILE:"):
+        filename = data.replace("FILE:", "", 1)
+        file_path = os.path.join(FILES_DIR, filename)
+
+        if not os.path.exists(file_path):
+            await query.message.reply_text("⚠️ الملف غير متوفر حالياً.")
+            return
+
+        with open(file_path, "rb") as f:
+            await query.message.reply_document(
+                document=f,
+                filename=filename,
+                caption="✅ تفضلوا الملف"
+            )
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("اكتبي /start لعرض قائمة الملفات.")
+    await update.message.reply_text("اكتبي /start لعرض القائمة الرئيسية.")
 
 def main():
     if not TOKEN:
-        raise RuntimeError("Missing TELEGRAM_BOT_TOKEN env var (Render Secret)")
+        raise RuntimeError("Missing TELEGRAM_BOT_TOKEN")
 
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
